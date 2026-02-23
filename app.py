@@ -756,14 +756,49 @@ if not st.session_state["logged_in_user"]:
             border-color: #94a3b8 !important;
             color: #94a3b8 !important;
         }
-        /* Make sure the text is large enough and looks clickable */
+        .add-pic:hover {
+            border-color: #94a3b8 !important;
+            color: #94a3b8 !important;
+        }
+        .login-title {
+            text-align: center; 
+            font-size: 3.5rem; 
+            font-weight: 800; 
+            margin-top: 4rem; 
+            margin-bottom: 0;
+        }
+        .login-subtitle {
+            text-align: center; 
+            font-size: 1.2rem; 
+            color: #94a3b8; 
+            margin-bottom: 3rem;
+        }
+        @media (max-width: 768px) {
+            .profile-pic {
+                width: 90px;
+                height: 90px;
+                font-size: 2.5rem;
+                border-radius: 15px;
+            }
+            .add-pic {
+                font-size: 3rem !important;
+            }
+            .login-title {
+                font-size: 2.2rem;
+                margin-top: 2rem;
+            }
+            .login-subtitle {
+                font-size: 1rem;
+                margin-bottom: 1.5rem;
+            }
+        }
         </style>
         """, unsafe_allow_html=True
     )
 
     if st.session_state["login_step"] == "select_profile":
-        st.markdown("<h1 style='text-align: center; font-size: 3.5rem; font-weight: 800; margin-top: 4rem; margin-bottom: 0;'>Chi sta investendo?</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-size: 1.2rem; color: #94a3b8; margin-bottom: 3rem;'>Seleziona il tuo profilo per accedere all'area segnali</p>", unsafe_allow_html=True)
+        st.markdown("<h1 class='login-title'>Chi sta investendo?</h1>", unsafe_allow_html=True)
+        st.markdown("<p class='login-subtitle'>Seleziona il tuo profilo per accedere all'area segnali</p>", unsafe_allow_html=True)
 
         users = list(st.session_state["users"].keys())
         # Force Admin to be always first
@@ -807,8 +842,8 @@ if not st.session_state["logged_in_user"]:
 
     elif st.session_state["login_step"] == "enter_password":
         user = st.session_state["selected_profile"]
-        st.markdown(f"<h2 style='text-align: center; margin-top: 4rem;'>Bentornato, {user}</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #94a3b8; margin-bottom: 2rem;'>Inserisci la tua password per continuare</p>", unsafe_allow_html=True)
+        st.markdown(f"<h2 class='login-title'>Bentornato, {user}</h2>", unsafe_allow_html=True)
+        st.markdown("<p class='login-subtitle'>Inserisci la tua password per continuare</p>", unsafe_allow_html=True)
         
         _, c, _ = st.columns([1, 2, 1])
         with c:
@@ -830,8 +865,8 @@ if not st.session_state["logged_in_user"]:
                         st.error("Password errata.")
 
     elif st.session_state["login_step"] == "signup":
-        st.markdown("<h2 style='text-align: center; margin-top: 4rem;'>Nuovo Profilo</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #94a3b8; margin-bottom: 2rem;'>Crea un'utenza protetta da password</p>", unsafe_allow_html=True)
+        st.markdown("<h2 class='login-title'>Nuovo Profilo</h2>", unsafe_allow_html=True)
+        st.markdown("<p class='login-subtitle'>Crea un'utenza protetta da password</p>", unsafe_allow_html=True)
         
         _, c, _ = st.columns([1, 2, 1])
         with c:
@@ -892,6 +927,32 @@ st.markdown(
         font-size: 0.68rem;
         margin-top: 4px;
         color: #16a34a;
+    }
+    
+    /* Mobile Responsiveness for Main UI */
+    @media (max-width: 768px) {
+        .block-container {
+            padding-top: 2rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-bottom: 3rem !important;
+        }
+        .portfolio-sim-wrap [data-testid="stDataFrame"] * {
+            font-size: 0.70rem !important;
+        }
+        .portfolio-kpi {
+            padding: 8px 10px;
+            min-height: 65px;
+        }
+        .portfolio-kpi-label {
+            font-size: 0.65rem;
+        }
+        .portfolio-kpi-value {
+            font-size: 0.70rem;
+        }
+        .portfolio-kpi-delta {
+            font-size: 0.60rem;
+        }
     }
     </style>
     """,
