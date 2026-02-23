@@ -1,4 +1,8 @@
+import base64
+import hashlib
+import json
 import math
+import os
 from datetime import datetime
 from urllib.parse import quote_plus
 
@@ -584,6 +588,261 @@ def render_kpi(label, value, delta=None):
 
 
 st.set_page_config(page_title="SEGNALI DI INVESTIMENTO", layout="wide")
+
+# --- AUTHENTICATION LOGIC ---
+USERS_FILE = "users.json"
+
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        default_users = {"supervisore": {"password": "", "image_base64": ""}}
+        with open(USERS_FILE, "w") as f:
+            json.dump(default_users, f)
+        return default_users
+    try:
+        with open(USERS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {"supervisore": {"password": "", "image_base64": ""}}
+
+def save_users(users_dict):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users_dict, f)
+
+def hash_password(password):
+    if not password:
+        return ""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password, hashed):
+    if not hashed:
+        return password == ""
+    return hash_password(password) == hashed
+
+# Initialization
+if "users" not in st.session_state:
+    st.session_state["users"] = load_users()
+
+# Retrieve saved login from URL parameters for persistence
+query_params = st.query_params
+saved_user = query_params.get("logged_in")
+
+if "logged_in_user" not in st.session_state:
+    if saved_user and saved_user in st.session_state["users"]:
+        st.session_state["logged_in_user"] = saved_user
+    else:
+        st.session_state["logged_in_user"] = None
+
+if "login_step" not in st.session_state:
+    st.session_state["login_step"] = "select_profile"
+
+if "selected_profile" not in st.session_state:
+    st.session_state["selected_profile"] = None
+
+def get_base64_of_bin_file(bin_file):
+    import base64
+    import os
+    if os.path.exists(bin_file):
+        with open(bin_file, 'rb') as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    return ""
+
+bg_img = get_base64_of_bin_file("bg_home.png")
+if bg_img:
+    st.markdown(
+        f"""
+        <style>
+        /* Target the main container of the app */
+        .stApp {{
+            background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 1)), url("data:image/png;base64,{bg_img}");
+            background-size: cover;
+            background-position: top center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }}
+        
+        /* Make the header transparent so the background shows through */
+        header[data-testid="stHeader"] {{
+            background: transparent !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+# Process actions from clickable icons
+if "action" in query_params:
+    action = query_params["action"]
+    if action == "login":
+        req_user = query_params.get("user")
+        if req_user and req_user in st.session_state["users"]:
+            if req_user == "supervisore":
+                st.session_state["logged_in_user"] = req_user
+                st.session_state["login_step"] = "select_profile"
+                st.query_params["logged_in"] = req_user
+                if "action" in st.query_params: del st.query_params["action"]
+                if "user" in st.query_params: del st.query_params["user"]
+                st.rerun()
+            else:
+                st.session_state["selected_profile"] = req_user
+                st.session_state["login_step"] = "enter_password"
+                if "action" in st.query_params: del st.query_params["action"]
+                if "user" in st.query_params: del st.query_params["user"]
+                st.rerun()
+    elif action == "signup":
+        st.session_state["login_step"] = "signup"
+        if "action" in st.query_params: del st.query_params["action"]
+        st.rerun()
+
+# Login/Signup Screen
+if not st.session_state["logged_in_user"]:
+    st.markdown(
+        """
+        <style>
+        .profile-pic {
+            width: 120px;
+            height: 120px;
+            border-radius: 20px;
+            background-color: #1e293b;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin: 0 auto 10px auto;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            background-size: cover;
+            background-position: center;
+        }
+        .profile-pic:hover {
+            border: 2px solid #94a3b8;
+        }
+        .add-pic {
+            background-color: transparent !important;
+            border: 2px dashed #475569 !important;
+            color: #475569 !important;
+            font-size: 4rem !important;
+            font-weight: 300 !important;
+        }
+        .add-pic:hover {
+            border-color: #94a3b8 !important;
+            color: #94a3b8 !important;
+        }
+        /* Make sure the text is large enough and looks clickable */
+        </style>
+        """, unsafe_allow_html=True
+    )
+
+    if st.session_state["login_step"] == "select_profile":
+        st.markdown("<h1 style='text-align: center; font-size: 3.5rem; font-weight: 800; margin-top: 4rem; margin-bottom: 0;'>Chi sta investendo?</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-size: 1.2rem; color: #94a3b8; margin-bottom: 3rem;'>Seleziona il tuo profilo per accedere all'area segnali</p>", unsafe_allow_html=True)
+
+        users = list(st.session_state["users"].keys())
+        total_cards = len(users) + 1
+        
+        cols = st.columns([1] + [2]*total_cards + [1])
+        
+        for i, user in enumerate(users):
+            with cols[i+1]:
+                initial = user[0].upper()
+                user_data = st.session_state["users"].get(user, {})
+                img_b64 = user_data.get("image_base64", "")
+                
+                if img_b64:
+                    bg_style = f"background-image: url('data:image/jpeg;base64,{img_b64}'); color: transparent;"
+                else:
+                    bg_style = ""
+
+                # Make the avatar clickable
+                link = f"/?action=login&user={quote_plus(user)}"
+                st.markdown(f'<a href="{link}" target="_self" style="text-decoration: none;"><div class="profile-pic" style="{bg_style}">{initial if not img_b64 else ""}</div></a>', unsafe_allow_html=True)
+                
+                if st.button(user, key=f"btn_{user}", use_container_width=True, type="tertiary"):
+                    if user == "supervisore":
+                        st.session_state["logged_in_user"] = user
+                        st.session_state["login_step"] = "select_profile"
+                        st.query_params["logged_in"] = user
+                        if "action" in st.query_params: del st.query_params["action"]
+                        if "user" in st.query_params: del st.query_params["user"]
+                        st.rerun()
+                    else:
+                        st.session_state["selected_profile"] = user
+                        st.session_state["login_step"] = "enter_password"
+                        if "action" in st.query_params: del st.query_params["action"]
+                        if "user" in st.query_params: del st.query_params["user"]
+                        st.rerun()
+                        
+        with cols[len(users)+1]:
+            st.markdown(f'<a href="/?action=signup" target="_self" style="text-decoration: none;"><div class="profile-pic add-pic">+</div></a>', unsafe_allow_html=True)
+            if st.button("Aggiungi", key="btn_add", use_container_width=True, type="tertiary"):
+                st.session_state["login_step"] = "signup"
+                if "action" in st.query_params: del st.query_params["action"]
+                st.rerun()
+
+    elif st.session_state["login_step"] == "enter_password":
+        user = st.session_state["selected_profile"]
+        st.markdown(f"<h2 style='text-align: center; margin-top: 4rem;'>Bentornato, {user}</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8; margin-bottom: 2rem;'>Inserisci la tua password per continuare</p>", unsafe_allow_html=True)
+        
+        _, c, _ = st.columns([1, 2, 1])
+        with c:
+            login_pwd = st.text_input("Password", type="password", key="login_pwd")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("⬅️ Indietro", use_container_width=True):
+                    st.session_state["login_step"] = "select_profile"
+                    st.rerun()
+            with col2:
+                if st.button("Accedi", type="primary", use_container_width=True):
+                    stored_hash = st.session_state["users"][user].get("password", "")
+                    if verify_password(login_pwd, stored_hash):
+                        st.session_state["logged_in_user"] = user
+                        st.session_state["login_step"] = "select_profile"
+                        st.query_params["logged_in"] = user
+                        st.rerun()
+                    else:
+                        st.error("Password errata.")
+
+    elif st.session_state["login_step"] == "signup":
+        st.markdown("<h2 style='text-align: center; margin-top: 4rem;'>Nuovo Profilo</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8; margin-bottom: 2rem;'>Crea un'utenza protetta da password</p>", unsafe_allow_html=True)
+        
+        _, c, _ = st.columns([1, 2, 1])
+        with c:
+            signup_user = st.text_input("Username").strip()
+            signup_pwd = st.text_input("Password", type="password")
+            signup_pwd2 = st.text_input("Conferma Password", type="password")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("⬅️ Annulla", use_container_width=True):
+                    st.session_state["login_step"] = "select_profile"
+                    st.rerun()
+            with col2:
+                if st.button("Crea utenza", type="primary", use_container_width=True):
+                    if not signup_user:
+                        st.error("Inserisci uno username.")
+                    elif signup_user in st.session_state["users"]:
+                        st.error("Username già in uso.")
+                    elif signup_user.lower() == "supervisore":
+                        st.error("Username non consentito.")
+                    elif not signup_pwd:
+                        st.error("Inserisci una password.")
+                    elif signup_pwd != signup_pwd2:
+                        st.error("Le password non coincidono.")
+                    else:
+                        st.session_state["users"][signup_user] = {"password": hash_password(signup_pwd), "image_base64": ""}
+                        save_users(st.session_state["users"])
+                        st.session_state["login_step"] = "select_profile"
+                        st.success("Profilo creato! Ora puoi accedere.")
+                        st.rerun()
+
+    st.stop()  # Stop execution of the rest of the app if not logged in
+
 st.markdown(
     """
     <style>
@@ -623,6 +882,49 @@ st.caption(
 )
 
 with st.sidebar:
+    st.markdown(f"**Utente:** `{st.session_state['logged_in_user']}`")
+    
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state["logged_in_user"] = None
+        if "logged_in" in st.query_params:
+            del st.query_params["logged_in"]
+        st.rerun()
+        
+    if st.session_state["logged_in_user"] != "supervisore":
+        with st.expander("🔑 Cambia Password"):
+            old_pwd = st.text_input("Vecchia Password", type="password")
+            new_pwd = st.text_input("Nuova Password", type="password")
+            new_pwd2 = st.text_input("Conferma Nuova Password", type="password")
+            
+            if st.button("Aggiorna Password"):
+                current_user = st.session_state["logged_in_user"]
+                stored_hash = st.session_state["users"][current_user].get("password", "")
+                if not verify_password(old_pwd, stored_hash):
+                    st.error("Vecchia password errata.")
+                elif not new_pwd:
+                    st.error("La nuova password non può essere vuota.")
+                elif new_pwd != new_pwd2:
+                    st.error("Le nuove password non coincidono.")
+                else:
+                    st.session_state["users"][current_user]["password"] = hash_password(new_pwd)
+                    save_users(st.session_state["users"])
+                    st.success("Password aggiornata con successo! Effettua il logout per testare.")
+
+        with st.expander("🖼️ Cambia Immagine Profilo"):
+            uploaded_file = st.file_uploader("Scegli un'immagine", type=["jpg", "jpeg", "png"])
+            if uploaded_file is not None:
+                if st.button("Salva Immagine", use_container_width=True):
+                    bytes_data = uploaded_file.getvalue()
+                    b64_encoded = base64.b64encode(bytes_data).decode()
+                    
+                    current_user = st.session_state["logged_in_user"]
+                    st.session_state["users"][current_user]["image_base64"] = b64_encoded
+                    save_users(st.session_state["users"])
+                    st.success("Immagine di profilo aggiornata correttamente!")
+                    st.rerun()
+
+    st.divider()
+
     # Info button to show manual
     @st.dialog("Manuale dell'Investitore", width="large")
     def show_manual():
@@ -631,6 +933,67 @@ with st.sidebar:
 
     if st.button("ℹ️ Info & Manuale", use_container_width=True):
         show_manual()
+        
+    if st.session_state["logged_in_user"] == "supervisore":
+        @st.dialog("Checklist Attività", width="large")
+        def show_checklist():
+            st.markdown("### Gestione Attività Supervisore")
+            
+            # Initialize checklist in user dict if not present
+            user_data = st.session_state["users"]["supervisore"]
+            if "checklist" not in user_data:
+                user_data["checklist"] = []
+                
+            tasks = user_data["checklist"]
+            
+            # Add new task
+            new_task_title = st.text_input("Titolo attività", key="new_task_title")
+            new_task_desc = st.text_area("Descrizione", key="new_task_desc")
+            
+            if st.button("Aggiungi", use_container_width=True):
+                if new_task_title:
+                    tasks.append({
+                        "text": new_task_title, 
+                        "description": new_task_desc, 
+                        "done": False
+                    })
+                    save_users(st.session_state["users"])
+                    st.session_state["dummy_refresh"] = st.session_state.get("dummy_refresh", 0) + 1
+
+            st.divider()
+
+            # Display and manage current tasks
+            if not tasks:
+                st.info("Nessuna attività presente.")
+            else:
+                for idx, task in enumerate(tasks):
+                    c_check, c_text, c_del = st.columns([1, 8, 1])
+                    with c_check:
+                        # Use on_change to save the state instead of rerunning
+                        def toggle_task(i=idx):
+                            tasks[i]["done"] = st.session_state[f"chk_{i}"]
+                            save_users(st.session_state["users"])
+
+                        st.checkbox("Done", value=task["done"], label_visibility="collapsed", key=f"chk_{idx}", on_change=toggle_task)
+
+                    with c_text:
+                        text_style = "text-decoration: line-through; color: #94a3b8;" if task["done"] else ""
+                        
+                        desc = task.get("description", "")
+                        if desc:
+                            with st.expander(rf"$\textsf{{\color{{inherit}}{{{task['text']}}}}}$"):
+                                st.markdown(f"<span style='{text_style}'>{desc}</span>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<span style='{text_style}'>{task['text']}</span>", unsafe_allow_html=True)
+                            
+                    with c_del:
+                        if st.button("❌", key=f"del_{idx}", help="Elimina attività"):
+                            tasks.pop(idx)
+                            save_users(st.session_state["users"])
+                            st.session_state["dummy_refresh"] = st.session_state.get("dummy_refresh", 0) + 1
+                            
+        if st.button("📋 Checklist Attività", use_container_width=True):
+            show_checklist()
 
     st.divider()
 
