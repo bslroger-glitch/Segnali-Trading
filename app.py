@@ -593,16 +593,23 @@ st.set_page_config(page_title="SEGNALI DI INVESTIMENTO", layout="wide")
 USERS_FILE = "users.json"
 
 def load_users():
+    # Hash for '1234' is '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'
+    default_hash = hashlib.sha256("1234".encode()).hexdigest()
     if not os.path.exists(USERS_FILE):
-        default_users = {"supervisore": {"password": "", "image_base64": ""}}
+        default_users = {"supervisore": {"password": default_hash, "image_base64": ""}}
         with open(USERS_FILE, "w") as f:
             json.dump(default_users, f)
         return default_users
     try:
         with open(USERS_FILE, "r") as f:
-            return json.load(f)
+            users_dict = json.load(f)
+            # Ensure supervisore has a password if it was previously empty
+            if "supervisore" in users_dict and users_dict["supervisore"].get("password") == "":
+                users_dict["supervisore"]["password"] = default_hash
+                save_users(users_dict)
+            return users_dict
     except:
-        return {"supervisore": {"password": "", "image_base64": ""}}
+        return {"supervisore": {"password": default_hash, "image_base64": ""}}
 
 def save_users(users_dict):
     with open(USERS_FILE, "w") as f:
@@ -676,19 +683,12 @@ if "action" in query_params:
     if action == "login":
         req_user = query_params.get("user")
         if req_user and req_user in st.session_state["users"]:
-            if req_user == "supervisore":
-                st.session_state["logged_in_user"] = req_user
-                st.session_state["login_step"] = "select_profile"
-                st.query_params["logged_in"] = req_user
-                if "action" in st.query_params: del st.query_params["action"]
-                if "user" in st.query_params: del st.query_params["user"]
-                st.rerun()
-            else:
-                st.session_state["selected_profile"] = req_user
-                st.session_state["login_step"] = "enter_password"
-                if "action" in st.query_params: del st.query_params["action"]
-                if "user" in st.query_params: del st.query_params["user"]
-                st.rerun()
+            # Supervisore ora richiede password come tutti
+            st.session_state["selected_profile"] = req_user
+            st.session_state["login_step"] = "enter_password"
+            if "action" in st.query_params: del st.query_params["action"]
+            if "user" in st.query_params: del st.query_params["user"]
+            st.rerun()
     elif action == "signup":
         st.session_state["login_step"] = "signup"
         if "action" in st.query_params: del st.query_params["action"]
@@ -762,19 +762,12 @@ if not st.session_state["logged_in_user"]:
                 st.markdown(f'<a href="{link}" target="_self" style="text-decoration: none;"><div class="profile-pic" style="{bg_style}">{initial if not img_b64 else ""}</div></a>', unsafe_allow_html=True)
                 
                 if st.button(user, key=f"btn_{user}", use_container_width=True, type="tertiary"):
-                    if user == "supervisore":
-                        st.session_state["logged_in_user"] = user
-                        st.session_state["login_step"] = "select_profile"
-                        st.query_params["logged_in"] = user
-                        if "action" in st.query_params: del st.query_params["action"]
-                        if "user" in st.query_params: del st.query_params["user"]
-                        st.rerun()
-                    else:
-                        st.session_state["selected_profile"] = user
-                        st.session_state["login_step"] = "enter_password"
-                        if "action" in st.query_params: del st.query_params["action"]
-                        if "user" in st.query_params: del st.query_params["user"]
-                        st.rerun()
+                    # Supervisore ora richiede password come tutti
+                    st.session_state["selected_profile"] = user
+                    st.session_state["login_step"] = "enter_password"
+                    if "action" in st.query_params: del st.query_params["action"]
+                    if "user" in st.query_params: del st.query_params["user"]
+                    st.rerun()
                         
         with cols[len(users)+1]:
             st.markdown(f'<a href="/?action=signup" target="_self" style="text-decoration: none;"><div class="profile-pic add-pic">+</div></a>', unsafe_allow_html=True)
