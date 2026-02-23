@@ -596,20 +596,25 @@ def load_users():
     # Hash for '1234' is '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'
     default_hash = hashlib.sha256("1234".encode()).hexdigest()
     if not os.path.exists(USERS_FILE):
-        default_users = {"supervisore": {"password": default_hash, "image_base64": ""}}
+        default_users = {"Admin": {"password": default_hash, "image_base64": ""}}
         with open(USERS_FILE, "w") as f:
             json.dump(default_users, f)
         return default_users
     try:
         with open(USERS_FILE, "r") as f:
             users_dict = json.load(f)
-            # Ensure supervisore has a password if it was previously empty
-            if "supervisore" in users_dict and users_dict["supervisore"].get("password") == "":
-                users_dict["supervisore"]["password"] = default_hash
+            # Migrate supervisore to Admin
+            if "supervisore" in users_dict:
+                users_dict["Admin"] = users_dict.pop("supervisore")
+                save_users(users_dict)
+                
+            # Ensure Admin has a password if it was previously empty
+            if "Admin" in users_dict and users_dict["Admin"].get("password") == "":
+                users_dict["Admin"]["password"] = default_hash
                 save_users(users_dict)
             return users_dict
     except:
-        return {"supervisore": {"password": default_hash, "image_base64": ""}}
+        return {"Admin": {"password": default_hash, "image_base64": ""}}
 
 def save_users(users_dict):
     with open(USERS_FILE, "w") as f:
@@ -672,6 +677,25 @@ if bg_img:
         header[data-testid="stHeader"] {{
             background: transparent !important;
         }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+# Hide Streamlit toolbar (GitHub/Deploy icons) for non-supervisors
+if st.session_state.get("logged_in_user") != "Admin":
+    st.markdown(
+        """
+        <style>
+        /* Hide right-side toolbar and Deploy without breaking sidebar toggle */
+        [data-testid="stToolbar"] {visibility: hidden !important; pointer-events: none !important;}
+        .stDeployButton {display: none !important;}
+        #MainMenu {display: none !important;}
+        footer {display: none !important;}
+        
+        /* Force chevron button (sidebar toggle) to remain visible */
+        [data-testid="collapsedControl"] {visibility: visible !important; pointer-events: auto !important;}
+        button[kind="header"] {visibility: visible !important; pointer-events: auto !important;}
         </style>
         """,
         unsafe_allow_html=True
@@ -742,6 +766,10 @@ if not st.session_state["logged_in_user"]:
         st.markdown("<p style='text-align: center; font-size: 1.2rem; color: #94a3b8; margin-bottom: 3rem;'>Seleziona il tuo profilo per accedere all'area segnali</p>", unsafe_allow_html=True)
 
         users = list(st.session_state["users"].keys())
+        # Force Admin to be always first
+        if "Admin" in users:
+            users.remove("Admin")
+            users.insert(0, "Admin")
         total_cards = len(users) + 1
         
         cols = st.columns([1] + [2]*total_cards + [1])
@@ -752,14 +780,15 @@ if not st.session_state["logged_in_user"]:
                 user_data = st.session_state["users"].get(user, {})
                 img_b64 = user_data.get("image_base64", "")
                 
+                link = f"?action=login&user={quote_plus(user)}"
+                
+                # Make the avatar clickable
                 if img_b64:
                     bg_style = f"background-image: url('data:image/jpeg;base64,{img_b64}'); color: transparent;"
+                    st.markdown(f'<a href="{link}" target="_self" style="text-decoration: none; display: block;"><div class="profile-pic" style="{bg_style}"></div></a>', unsafe_allow_html=True)
                 else:
                     bg_style = ""
-
-                # Make the avatar clickable
-                link = f"/?action=login&user={quote_plus(user)}"
-                st.markdown(f'<a href="{link}" target="_self" style="text-decoration: none;"><div class="profile-pic" style="{bg_style}">{initial if not img_b64 else ""}</div></a>', unsafe_allow_html=True)
+                    st.markdown(f'<a href="{link}" target="_self" style="text-decoration: none; display: block;"><div class="profile-pic" style="{bg_style}">{initial}</div></a>', unsafe_allow_html=True)
                 
                 if st.button(user, key=f"btn_{user}", use_container_width=True, type="tertiary"):
                     # Supervisore ora richiede password come tutti
@@ -770,7 +799,7 @@ if not st.session_state["logged_in_user"]:
                     st.rerun()
                         
         with cols[len(users)+1]:
-            st.markdown(f'<a href="/?action=signup" target="_self" style="text-decoration: none;"><div class="profile-pic add-pic">+</div></a>', unsafe_allow_html=True)
+            st.markdown(f'<a href="?action=signup" target="_self" style="text-decoration: none;"><div class="profile-pic add-pic">+</div></a>', unsafe_allow_html=True)
             if st.button("Aggiungi", key="btn_add", use_container_width=True, type="tertiary"):
                 st.session_state["login_step"] = "signup"
                 if "action" in st.query_params: del st.query_params["action"]
@@ -821,7 +850,7 @@ if not st.session_state["logged_in_user"]:
                         st.error("Inserisci uno username.")
                     elif signup_user in st.session_state["users"]:
                         st.error("Username già in uso.")
-                    elif signup_user.lower() == "supervisore":
+                    elif signup_user.lower() == "admin":
                         st.error("Username non consentito.")
                     elif not signup_pwd:
                         st.error("Inserisci una password.")
@@ -875,15 +904,30 @@ st.caption(
 )
 
 with st.sidebar:
-    st.markdown(f"**Utente:** `{st.session_state['logged_in_user']}`")
-    
+    # Mostra utente corrente e icona in alto
+    current_u = st.session_state["logged_in_user"]
+    if current_u:
+        u_data = st.session_state["users"].get(current_u, {})
+        u_b64 = u_data.get("image_base64", "")
+        
+        col_img, col_txt = st.columns([1, 3])
+        with col_img:
+            if u_b64:
+                st.markdown(f'<img src="data:image/jpeg;base64,{u_b64}" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;">', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div style="width: 45px; height: 45px; border-radius: 50%; background-color: #1e293b; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold;">{current_u[0].upper()}</div>', unsafe_allow_html=True)
+        with col_txt:
+            st.markdown(f"**Utente connesso:**<br/>`{current_u}`", unsafe_allow_html=True)
+            
+        st.write("") # Spacer
+        
     if st.button("🚪 Logout", use_container_width=True):
         st.session_state["logged_in_user"] = None
         if "logged_in" in st.query_params:
             del st.query_params["logged_in"]
         st.rerun()
         
-    if st.session_state["logged_in_user"] != "supervisore":
+    if st.session_state["logged_in_user"] != "Admin":
         with st.expander("🔑 Cambia Password"):
             old_pwd = st.text_input("Vecchia Password", type="password")
             new_pwd = st.text_input("Nuova Password", type="password")
@@ -903,19 +947,6 @@ with st.sidebar:
                     save_users(st.session_state["users"])
                     st.success("Password aggiornata con successo! Effettua il logout per testare.")
 
-        with st.expander("🖼️ Cambia Immagine Profilo"):
-            uploaded_file = st.file_uploader("Scegli un'immagine", type=["jpg", "jpeg", "png"])
-            if uploaded_file is not None:
-                if st.button("Salva Immagine", use_container_width=True):
-                    bytes_data = uploaded_file.getvalue()
-                    b64_encoded = base64.b64encode(bytes_data).decode()
-                    
-                    current_user = st.session_state["logged_in_user"]
-                    st.session_state["users"][current_user]["image_base64"] = b64_encoded
-                    save_users(st.session_state["users"])
-                    st.success("Immagine di profilo aggiornata correttamente!")
-                    st.rerun()
-
     st.divider()
 
     # Info button to show manual
@@ -927,13 +958,13 @@ with st.sidebar:
     if st.button("ℹ️ Info & Manuale", use_container_width=True):
         show_manual()
         
-    if st.session_state["logged_in_user"] == "supervisore":
+    if st.session_state["logged_in_user"] == "Admin":
         @st.dialog("Checklist Attività", width="large")
         def show_checklist():
             st.markdown("### Gestione Attività Supervisore")
             
             # Initialize checklist in user dict if not present
-            user_data = st.session_state["users"]["supervisore"]
+            user_data = st.session_state["users"]["Admin"]
             if "checklist" not in user_data:
                 user_data["checklist"] = []
                 
